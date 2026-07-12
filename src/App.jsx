@@ -15,6 +15,8 @@ const DEFAULT_SETTINGS = {
   clinic_name_ar: "",
   doctor_name_ar: "",
   address_ar: "",
+  use_preprinted_paper: true,
+  preprinted_header_mm: 40,
 };
 
 function uid(prefix) {
@@ -303,6 +305,7 @@ function MedPicker({ meds, onPick, onClose }) {
   const [custom, setCustom] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customStrength, setCustomStrength] = useState("");
+  const [customForm, setCustomForm] = useState("");
   const filtered = meds.filter((m) => (m.name + " " + (m.generic_name || "")).toLowerCase().includes(q.toLowerCase()));
 
   return (
@@ -319,7 +322,7 @@ function MedPicker({ meds, onPick, onClose }) {
               <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search medications…" style={{ width: "100%", padding: "8px 8px 8px 30px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 13 }} />
             </div>
             {filtered.map((m) => (
-              <div key={m.id} onClick={() => onPick({ med_id: m.id, name: m.name, strength: m.strength, dose: m.dose, frequency: m.frequency, duration: m.duration, instructions: "", instructions_ar: "" })}
+              <div key={m.id} onClick={() => onPick({ med_id: m.id, name: m.name, strength: m.strength, form: m.form, dose: m.dose, frequency: m.frequency, duration: m.duration, instructions: "", instructions_ar: "" })}
                 style={{ padding: "8px 6px", borderBottom: "1px solid var(--line)", cursor: "pointer", fontSize: 13 }}>
                 <div style={{ fontWeight: 500 }}>{m.name} <span style={{ color: "var(--ink-soft)", fontWeight: 400 }}>{m.strength}</span></div>
                 <div style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>{m.generic_name} · {m.dose}, {m.frequency}</div>
@@ -332,8 +335,9 @@ function MedPicker({ meds, onPick, onClose }) {
           <>
             <div className="rx-field"><label>Name</label><input value={customName} onChange={(e) => setCustomName(e.target.value)} /></div>
             <div className="rx-field"><label>Strength</label><input value={customStrength} onChange={(e) => setCustomStrength(e.target.value)} placeholder="e.g. 250 mg" /></div>
+            <div className="rx-field"><label>Form</label><input value={customForm} onChange={(e) => setCustomForm(e.target.value)} placeholder="e.g. Tablet" /></div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="rx-btn primary" disabled={!customName.trim()} onClick={() => onPick({ med_id: null, name: customName.trim(), strength: customStrength, dose: "", frequency: "", duration: "", instructions: "", instructions_ar: "" })}>Add</button>
+              <button className="rx-btn primary" disabled={!customName.trim()} onClick={() => onPick({ med_id: null, name: customName.trim(), strength: customStrength, form: customForm, dose: "", frequency: "", duration: "", instructions: "", instructions_ar: "" })}>Add</button>
               <button className="rx-btn ghost" onClick={() => setCustom(false)}>Back to list</button>
             </div>
           </>
@@ -522,22 +526,46 @@ function SettingsView({ settings, onSave }) {
   const [draft, setDraft] = useState(settings);
   useEffect(() => setDraft(settings), [settings]);
   const set = (k) => (e) => setDraft({ ...draft, [k]: e.target.value });
+  const setNum = (k) => (e) => setDraft({ ...draft, [k]: Number(e.target.value) });
+  const setBool = (k) => (e) => setDraft({ ...draft, [k]: e.target.checked });
   return (
     <div>
       <h1 className="rx-h1">Settings</h1>
-      <p className="rx-sub">This information appears on the letterhead of every printed prescription.</p>
+      <p className="rx-sub">This information is used on printed prescriptions.</p>
+
       <div className="rx-card" style={{ maxWidth: 460 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Printing paper</div>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, margin: "10px 0" }}>
+          <input type="checkbox" checked={!!draft.use_preprinted_paper} onChange={setBool("use_preprinted_paper")} />
+          I print on paper with a pre-printed letterhead / logo
+        </label>
+        {draft.use_preprinted_paper ? (
+          <div className="rx-field" style={{ maxWidth: 220 }}>
+            <label>Blank space to leave at top (mm)</label>
+            <input type="number" min="0" max="120" value={draft.preprinted_header_mm ?? 40} onChange={setNum("preprinted_header_mm")} />
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+            The clinic details below will be printed as a header at the top of every prescription.
+          </div>
+        )}
+      </div>
+
+      <div className="rx-card" style={{ maxWidth: 460, marginTop: 14, opacity: draft.use_preprinted_paper ? 0.55 : 1 }}>
         <div className="rx-field"><label>Clinic name</label><input value={draft.clinic_name} onChange={set("clinic_name")} /></div>
         <div className="rx-field"><label>Doctor name</label><input value={draft.doctor_name} onChange={set("doctor_name")} /></div>
         <div className="rx-field"><label>Credentials / specialty</label><input value={draft.credentials} onChange={set("credentials")} /></div>
         <div className="rx-field"><label>Address</label><input value={draft.address} onChange={set("address")} /></div>
         <div className="rx-field"><label>Phone</label><input value={draft.phone} onChange={set("phone")} /></div>
+        {draft.use_preprinted_paper && (
+          <div style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>Not printed while pre-printed paper is on — kept here for your records.</div>
+        )}
       </div>
 
       <div className="rx-card" style={{ maxWidth: 460, marginTop: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Arabic letterhead (optional)</div>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Arabic instructions (optional)</div>
         <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>
-          Leave blank to print in English only. Fill these in to print a bilingual prescription.
+          Only used if your pre-printed paper doesn't already have an Arabic clinic name — appears next to the English clinic name if filled in.
         </div>
         <div className="rx-field"><label>Clinic name (Arabic)</label><input dir="rtl" value={draft.clinic_name_ar || ""} onChange={set("clinic_name_ar")} placeholder="اسم العيادة" /></div>
         <div className="rx-field"><label>Doctor name (Arabic)</label><input dir="rtl" value={draft.doctor_name_ar || ""} onChange={set("doctor_name_ar")} placeholder="اسم الطبيب" /></div>
@@ -575,66 +603,90 @@ function BiLabel({ en, ar }) {
   );
 }
 
+const NOTES_LINE_COUNT = 14;
+
 function RxPad({ rx, settings }) {
   const hasArabic = !!(settings.clinic_name_ar || settings.doctor_name_ar || settings.address_ar);
-  const th = { textAlign: "left", padding: "6px 4px", fontSize: 10.5, textTransform: "uppercase", color: "#4B5955" };
+  const usePreprinted = !!settings.use_preprinted_paper;
+
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", color: "#16231F", padding: "20px 28px", position: "relative" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #0B5E56", paddingBottom: 12, marginBottom: 16 }}>
-        <div>
-          <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name}</div>
-          {settings.clinic_name_ar && (
-            <div dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Lora', serif", fontSize: 18, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name_ar}</div>
-          )}
-          <div style={{ fontSize: 12.5, color: "#4B5955", marginTop: 2 }}>
-            {settings.doctor_name} · {settings.credentials}
-            {settings.doctor_name_ar && <span dir="rtl" style={{ marginInlineStart: 6 }}> · {settings.doctor_name_ar}</span>}
+      {usePreprinted ? (
+        <div style={{ height: `${settings.preprinted_header_mm ?? 40}mm` }} />
+      ) : (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #0B5E56", paddingBottom: 12, marginBottom: 16 }}>
+          <div>
+            <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name}</div>
+            {settings.clinic_name_ar && (
+              <div dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Lora', serif", fontSize: 18, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name_ar}</div>
+            )}
+            <div style={{ fontSize: 12.5, color: "#4B5955", marginTop: 2 }}>
+              {settings.doctor_name} · {settings.credentials}
+              {settings.doctor_name_ar && <span dir="rtl" style={{ marginInlineStart: 6 }}> · {settings.doctor_name_ar}</span>}
+            </div>
+            <div style={{ fontSize: 11, color: "#4B5955", marginTop: 2 }}>
+              {settings.address} · {settings.phone}
+              {settings.address_ar && <span dir="rtl" style={{ marginInlineStart: 6 }}> · {settings.address_ar}</span>}
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: "#4B5955", marginTop: 2 }}>
-            {settings.address} · {settings.phone}
-            {settings.address_ar && <span dir="rtl" style={{ marginInlineStart: 6 }}> · {settings.address_ar}</span>}
-          </div>
+          <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontWeight: 600, fontSize: 34, color: "#0B5E56" }}>℞</div>
         </div>
-        <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontWeight: 600, fontSize: 34, color: "#0B5E56" }}>℞</div>
+      )}
+
+      {usePreprinted && (settings.clinic_name_ar || settings.doctor_name_ar || settings.address_ar) && (
+        <div dir="rtl" style={{ textAlign: "right", fontSize: 11, color: "#4B5955", marginBottom: 10, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
+          {[settings.clinic_name_ar, settings.doctor_name_ar, settings.address_ar].filter(Boolean).join(" · ")}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 24, fontSize: 13, borderBottom: "1.5px solid #16231F", paddingBottom: 10, marginBottom: 18 }}>
+        <div>
+          <strong><BiLabel en="Patient name" ar={hasArabic ? "اسم المريض" : ""} />:</strong> {rx.patient_name}
+          {rx.patient_age ? ` (${rx.patient_age}${hasArabic ? "" : "y"})` : ""}
+          {rx.patient_gender ? `, ${rx.patient_gender}` : ""}
+        </div>
+        <div style={{ marginInlineStart: "auto" }}>
+          <strong><BiLabel en="Date" ar={hasArabic ? "التاريخ" : ""} />:</strong> {formatDate(rx.date)}
+        </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 16 }}>
-        <div>
-          <strong><BiLabel en="Patient" ar={hasArabic ? "المريض" : ""} />:</strong> {rx.patient_name}{rx.patient_age ? `, ${rx.patient_age}y` : ""}{rx.patient_gender ? `, ${rx.patient_gender}` : ""}
-        </div>
-        <div><strong><BiLabel en="Date" ar={hasArabic ? "التاريخ" : ""} />:</strong> {formatDate(rx.date)}</div>
-      </div>
-
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, marginBottom: 16 }}>
-        <thead>
-          <tr style={{ borderBottom: "1px solid #DDE3E0" }}>
-            <th style={th}>#</th>
-            <th style={th}><BiLabel en="Medication" ar={hasArabic ? "الدواء" : ""} /></th>
-            <th style={th}><BiLabel en="Dose" ar={hasArabic ? "الجرعة" : ""} /></th>
-            <th style={th}><BiLabel en="Frequency" ar={hasArabic ? "عدد المرات" : ""} /></th>
-            <th style={th}><BiLabel en="Duration" ar={hasArabic ? "المدة" : ""} /></th>
-          </tr>
-        </thead>
-        <tbody>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 150px", gap: 0 }}>
+        <div style={{ borderInlineEnd: "1px solid #16231F", paddingInlineEnd: 18 }}>
           {rx.items.map((it, i) => (
-            <tr key={i} style={{ borderBottom: "1px solid #EEF1EF" }}>
-              <td style={{ padding: "7px 4px" }}>{i + 1}</td>
-              <td style={{ padding: "7px 4px" }}>
-                <div style={{ fontWeight: 500 }}>{it.name} {it.strength ? `(${it.strength})` : ""}</div>
-                {it.instructions && <div style={{ fontSize: 11, color: "#4B5955" }}>{it.instructions}</div>}
-                {it.instructions_ar && <div dir="rtl" style={{ fontSize: 11, color: "#4B5955", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>{it.instructions_ar}</div>}
-              </td>
-              <td style={{ padding: "7px 4px" }}>{it.dose}</td>
-              <td style={{ padding: "7px 4px" }}>{it.frequency}</td>
-              <td style={{ padding: "7px 4px" }}>{it.duration}</td>
-            </tr>
+            <div key={i} style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                <span style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontWeight: 600, fontSize: 18, color: "#0B5E56" }}>℞</span>
+                <span style={{ fontSize: 14, fontWeight: 500 }}>
+                  {it.name}{it.strength ? ` ${it.strength}` : ""}{it.form ? ` (${it.form})` : ""}
+                </span>
+              </div>
+              {(it.dose || it.frequency || it.duration || it.instructions) && (
+                <div style={{ fontSize: 12, color: "#4B5955", marginInlineStart: 26, marginTop: 2 }}>
+                  {[it.dose, it.frequency, it.duration].filter(Boolean).join(", ")}
+                  {it.instructions ? ` — ${it.instructions}` : ""}
+                </div>
+              )}
+              {it.instructions_ar && (
+                <div dir="rtl" style={{ fontSize: 12, color: "#4B5955", marginInlineStart: 26, marginTop: 2, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
+                  {it.instructions_ar}
+                </div>
+              )}
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
 
-      {rx.notes && <div style={{ fontSize: 12, marginBottom: 24 }}><strong><BiLabel en="Notes" ar={hasArabic ? "ملاحظات" : ""} />:</strong> {rx.notes}</div>}
+        <div style={{ paddingInlineStart: 14 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.03em", color: "#4B5955", marginBottom: 8 }}>
+            <BiLabel en="Notes" ar={hasArabic ? "ملاحظات" : ""} />
+          </div>
+          {rx.notes && <div style={{ fontSize: 11.5, marginBottom: 8, lineHeight: 1.5 }}>{rx.notes}</div>}
+          {Array.from({ length: NOTES_LINE_COUNT }).map((_, i) => (
+            <div key={i} style={{ borderBottom: "1px solid #DDE3E0", height: 20 }} />
+          ))}
+        </div>
+      </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 40 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 32 }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ borderTop: "1px solid #16231F", width: 180, marginBottom: 4 }} />
           <div style={{ fontSize: 11, color: "#4B5955" }}><BiLabel en="Doctor's signature" ar={hasArabic ? "توقيع الطبيب" : ""} /></div>
