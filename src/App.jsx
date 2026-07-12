@@ -12,6 +12,9 @@ const DEFAULT_SETTINGS = {
   credentials: "MD — Specialty",
   address: "Clinic address, City",
   phone: "+20 000 000 0000",
+  clinic_name_ar: "",
+  doctor_name_ar: "",
+  address_ar: "",
 };
 
 function uid(prefix) {
@@ -152,7 +155,7 @@ export default function App() {
 function GlobalStyle() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Arabic:wght@400;500;600&display=swap');
       html, body, #root { height: 100%; }
       .rxapp {
         --paper: #F6F7F5; --panel: #FFFFFF; --ink: #16231F; --ink-soft: #4B5955;
@@ -259,6 +262,10 @@ function NewPrescriptionView({ meds, onIssue }) {
                 <input value={it.duration} onChange={(e) => updateItem(it.uid, { duration: e.target.value })} placeholder="Duration" style={{ fontSize: 12.5, padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 5 }} />
                 <input value={it.instructions || ""} onChange={(e) => updateItem(it.uid, { instructions: e.target.value })} placeholder="Special instructions (optional)" style={{ fontSize: 12.5, padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 5 }} />
               </div>
+              <div style={{ marginTop: 6 }}>
+                <input dir="rtl" value={it.instructions_ar || ""} onChange={(e) => updateItem(it.uid, { instructions_ar: e.target.value })} placeholder="تعليمات بالعربي (اختياري)"
+                  style={{ fontSize: 12.5, padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 5, width: "100%" }} />
+              </div>
             </div>
           ))
         )}
@@ -312,7 +319,7 @@ function MedPicker({ meds, onPick, onClose }) {
               <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search medications…" style={{ width: "100%", padding: "8px 8px 8px 30px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 13 }} />
             </div>
             {filtered.map((m) => (
-              <div key={m.id} onClick={() => onPick({ med_id: m.id, name: m.name, strength: m.strength, dose: m.dose, frequency: m.frequency, duration: m.duration, instructions: "" })}
+              <div key={m.id} onClick={() => onPick({ med_id: m.id, name: m.name, strength: m.strength, dose: m.dose, frequency: m.frequency, duration: m.duration, instructions: "", instructions_ar: "" })}
                 style={{ padding: "8px 6px", borderBottom: "1px solid var(--line)", cursor: "pointer", fontSize: 13 }}>
                 <div style={{ fontWeight: 500 }}>{m.name} <span style={{ color: "var(--ink-soft)", fontWeight: 400 }}>{m.strength}</span></div>
                 <div style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>{m.generic_name} · {m.dose}, {m.frequency}</div>
@@ -326,7 +333,7 @@ function MedPicker({ meds, onPick, onClose }) {
             <div className="rx-field"><label>Name</label><input value={customName} onChange={(e) => setCustomName(e.target.value)} /></div>
             <div className="rx-field"><label>Strength</label><input value={customStrength} onChange={(e) => setCustomStrength(e.target.value)} placeholder="e.g. 250 mg" /></div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="rx-btn primary" disabled={!customName.trim()} onClick={() => onPick({ med_id: null, name: customName.trim(), strength: customStrength, dose: "", frequency: "", duration: "", instructions: "" })}>Add</button>
+              <button className="rx-btn primary" disabled={!customName.trim()} onClick={() => onPick({ med_id: null, name: customName.trim(), strength: customStrength, dose: "", frequency: "", duration: "", instructions: "", instructions_ar: "" })}>Add</button>
               <button className="rx-btn ghost" onClick={() => setCustom(false)}>Back to list</button>
             </div>
           </>
@@ -525,8 +532,19 @@ function SettingsView({ settings, onSave }) {
         <div className="rx-field"><label>Credentials / specialty</label><input value={draft.credentials} onChange={set("credentials")} /></div>
         <div className="rx-field"><label>Address</label><input value={draft.address} onChange={set("address")} /></div>
         <div className="rx-field"><label>Phone</label><input value={draft.phone} onChange={set("phone")} /></div>
-        <button className="rx-btn primary" onClick={() => onSave(draft)}><Check size={13} /> Save settings</button>
       </div>
+
+      <div className="rx-card" style={{ maxWidth: 460, marginTop: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Arabic letterhead (optional)</div>
+        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>
+          Leave blank to print in English only. Fill these in to print a bilingual prescription.
+        </div>
+        <div className="rx-field"><label>Clinic name (Arabic)</label><input dir="rtl" value={draft.clinic_name_ar || ""} onChange={set("clinic_name_ar")} placeholder="اسم العيادة" /></div>
+        <div className="rx-field"><label>Doctor name (Arabic)</label><input dir="rtl" value={draft.doctor_name_ar || ""} onChange={set("doctor_name_ar")} placeholder="اسم الطبيب" /></div>
+        <div className="rx-field"><label>Address (Arabic)</label><input dir="rtl" value={draft.address_ar || ""} onChange={set("address_ar")} placeholder="العنوان" /></div>
+      </div>
+
+      <button className="rx-btn primary" style={{ marginTop: 14 }} onClick={() => onSave(draft)}><Check size={13} /> Save settings</button>
     </div>
   );
 }
@@ -548,29 +566,53 @@ function PrintOverlay({ rx, settings, onClose }) {
   );
 }
 
+function BiLabel({ en, ar }) {
+  return (
+    <span>
+      {en}
+      {ar && <span dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}> / {ar}</span>}
+    </span>
+  );
+}
+
 function RxPad({ rx, settings }) {
+  const hasArabic = !!(settings.clinic_name_ar || settings.doctor_name_ar || settings.address_ar);
+  const th = { textAlign: "left", padding: "6px 4px", fontSize: 10.5, textTransform: "uppercase", color: "#4B5955" };
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", color: "#16231F", padding: "20px 28px", position: "relative" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #0B5E56", paddingBottom: 12, marginBottom: 16 }}>
         <div>
           <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name}</div>
-          <div style={{ fontSize: 12.5, color: "#4B5955", marginTop: 2 }}>{settings.doctor_name} · {settings.credentials}</div>
-          <div style={{ fontSize: 11, color: "#4B5955", marginTop: 2 }}>{settings.address} · {settings.phone}</div>
+          {settings.clinic_name_ar && (
+            <div dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Lora', serif", fontSize: 18, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name_ar}</div>
+          )}
+          <div style={{ fontSize: 12.5, color: "#4B5955", marginTop: 2 }}>
+            {settings.doctor_name} · {settings.credentials}
+            {settings.doctor_name_ar && <span dir="rtl" style={{ marginInlineStart: 6 }}> · {settings.doctor_name_ar}</span>}
+          </div>
+          <div style={{ fontSize: 11, color: "#4B5955", marginTop: 2 }}>
+            {settings.address} · {settings.phone}
+            {settings.address_ar && <span dir="rtl" style={{ marginInlineStart: 6 }}> · {settings.address_ar}</span>}
+          </div>
         </div>
         <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontWeight: 600, fontSize: 34, color: "#0B5E56" }}>℞</div>
       </div>
+
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 16 }}>
-        <div><strong>Patient:</strong> {rx.patient_name}{rx.patient_age ? `, ${rx.patient_age}y` : ""}{rx.patient_gender ? `, ${rx.patient_gender}` : ""}</div>
-        <div><strong>Date:</strong> {formatDate(rx.date)}</div>
+        <div>
+          <strong><BiLabel en="Patient" ar={hasArabic ? "المريض" : ""} />:</strong> {rx.patient_name}{rx.patient_age ? `, ${rx.patient_age}y` : ""}{rx.patient_gender ? `, ${rx.patient_gender}` : ""}
+        </div>
+        <div><strong><BiLabel en="Date" ar={hasArabic ? "التاريخ" : ""} />:</strong> {formatDate(rx.date)}</div>
       </div>
+
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, marginBottom: 16 }}>
         <thead>
           <tr style={{ borderBottom: "1px solid #DDE3E0" }}>
-            <th style={{ textAlign: "left", padding: "6px 4px", fontSize: 10.5, textTransform: "uppercase", color: "#4B5955" }}>#</th>
-            <th style={{ textAlign: "left", padding: "6px 4px", fontSize: 10.5, textTransform: "uppercase", color: "#4B5955" }}>Medication</th>
-            <th style={{ textAlign: "left", padding: "6px 4px", fontSize: 10.5, textTransform: "uppercase", color: "#4B5955" }}>Dose</th>
-            <th style={{ textAlign: "left", padding: "6px 4px", fontSize: 10.5, textTransform: "uppercase", color: "#4B5955" }}>Frequency</th>
-            <th style={{ textAlign: "left", padding: "6px 4px", fontSize: 10.5, textTransform: "uppercase", color: "#4B5955" }}>Duration</th>
+            <th style={th}>#</th>
+            <th style={th}><BiLabel en="Medication" ar={hasArabic ? "الدواء" : ""} /></th>
+            <th style={th}><BiLabel en="Dose" ar={hasArabic ? "الجرعة" : ""} /></th>
+            <th style={th}><BiLabel en="Frequency" ar={hasArabic ? "عدد المرات" : ""} /></th>
+            <th style={th}><BiLabel en="Duration" ar={hasArabic ? "المدة" : ""} /></th>
           </tr>
         </thead>
         <tbody>
@@ -580,6 +622,7 @@ function RxPad({ rx, settings }) {
               <td style={{ padding: "7px 4px" }}>
                 <div style={{ fontWeight: 500 }}>{it.name} {it.strength ? `(${it.strength})` : ""}</div>
                 {it.instructions && <div style={{ fontSize: 11, color: "#4B5955" }}>{it.instructions}</div>}
+                {it.instructions_ar && <div dir="rtl" style={{ fontSize: 11, color: "#4B5955", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>{it.instructions_ar}</div>}
               </td>
               <td style={{ padding: "7px 4px" }}>{it.dose}</td>
               <td style={{ padding: "7px 4px" }}>{it.frequency}</td>
@@ -588,11 +631,13 @@ function RxPad({ rx, settings }) {
           ))}
         </tbody>
       </table>
-      {rx.notes && <div style={{ fontSize: 12, marginBottom: 24 }}><strong>Notes:</strong> {rx.notes}</div>}
+
+      {rx.notes && <div style={{ fontSize: 12, marginBottom: 24 }}><strong><BiLabel en="Notes" ar={hasArabic ? "ملاحظات" : ""} />:</strong> {rx.notes}</div>}
+
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 40 }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ borderTop: "1px solid #16231F", width: 180, marginBottom: 4 }} />
-          <div style={{ fontSize: 11, color: "#4B5955" }}>Doctor's signature</div>
+          <div style={{ fontSize: 11, color: "#4B5955" }}><BiLabel en="Doctor's signature" ar={hasArabic ? "توقيع الطبيب" : ""} /></div>
         </div>
       </div>
     </div>
