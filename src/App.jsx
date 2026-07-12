@@ -598,7 +598,12 @@ function BiLabel({ en, ar }) {
   return (
     <span>
       {en}
-      {ar && <span dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}> / {ar}</span>}
+      {ar && (
+        <>
+          {" / "}
+          <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>{ar}</span>
+        </>
+      )}
     </span>
   );
 }
@@ -622,11 +627,21 @@ function RxPad({ rx, settings }) {
             )}
             <div style={{ fontSize: 12.5, color: "#4B5955", marginTop: 2 }}>
               {settings.doctor_name} · {settings.credentials}
-              {settings.doctor_name_ar && <span dir="rtl" style={{ marginInlineStart: 6 }}> · {settings.doctor_name_ar}</span>}
+              {settings.doctor_name_ar && (
+                <>
+                  {" · "}
+                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>{settings.doctor_name_ar}</span>
+                </>
+              )}
             </div>
             <div style={{ fontSize: 11, color: "#4B5955", marginTop: 2 }}>
               {settings.address} · {settings.phone}
-              {settings.address_ar && <span dir="rtl" style={{ marginInlineStart: 6 }}> · {settings.address_ar}</span>}
+              {settings.address_ar && (
+                <>
+                  {" · "}
+                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>{settings.address_ar}</span>
+                </>
+              )}
             </div>
           </div>
           <div style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontWeight: 600, fontSize: 34, color: "#0B5E56" }}>℞</div>
