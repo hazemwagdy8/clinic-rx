@@ -783,19 +783,21 @@ function RxPad({ rx, settings }) {
         </div>
       )}
 
-      <div style={{ position: "absolute", top: 14, insetInlineEnd: 20, display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontWeight: 600, fontSize: 16, color: "#0B5E56" }}>℞</span>
+      <div style={{ position: "absolute", top: "calc(14px - 4mm)", insetInlineEnd: 20 }}>
         {rx.patient_id && <span className="rx-mono" style={{ fontSize: 12, color: "#4B5955" }}>{rx.patient_id}</span>}
       </div>
 
-      {rx.diagnosis && (
-        <div style={{ fontSize: 13, marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid #DDE3E0" }}>
-          <strong><BiLabel en="Diagnosis" ar={hasArabic ? "التشخيص" : ""} />:</strong> {rx.diagnosis}
+      <div style={{ display: "flex", gap: 24, fontSize: 13, marginBottom: 16 }}>
+        <div>
+          {rx.patient_name}
+          {rx.patient_age ? ` (${rx.patient_age})` : ""}
+          {rx.patient_gender ? `, ${rx.patient_gender}` : ""}
         </div>
-      )}
+        <div style={{ marginInlineStart: "auto" }}>{formatDate(rx.date)}</div>
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 190px", gap: 0 }}>
-        <div style={{ borderInlineEnd: "1px solid #16231F", paddingInlineEnd: 18 }}>
+        <div style={{ paddingInlineEnd: 18 }}>
           {rx.items.map((it, i) => (
             <div key={i} style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
@@ -819,7 +821,7 @@ function RxPad({ rx, settings }) {
           ))}
         </div>
 
-        <div style={{ paddingInlineStart: "calc(14px + 15mm)" }}>
+        <div style={{ paddingInlineStart: "calc(14px + 15mm + 6mm)" }}>
           <div style={{ fontSize: 11.5, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.03em", color: "#4B5955", marginBottom: 8 }}>
             <BiLabel en="Notes" ar={hasArabic ? "ملاحظات" : ""} />
           </div>
@@ -827,13 +829,6 @@ function RxPad({ rx, settings }) {
           {Array.from({ length: NOTES_LINE_COUNT }).map((_, i) => (
             <div key={i} style={{ borderBottom: "1px solid #DDE3E0", height: 20 }} />
           ))}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 32 }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ borderTop: "1px solid #16231F", width: 180, marginBottom: 4 }} />
-          <div style={{ fontSize: 11, color: "#4B5955" }}><BiLabel en="Doctor's signature" ar={hasArabic ? "توقيع الطبيب" : ""} /></div>
         </div>
       </div>
     </div>
