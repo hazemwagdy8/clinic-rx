@@ -466,7 +466,9 @@ function MedPicker({ meds, onPick, onClose }) {
 function HistoryView({ prescriptions, onReprint, onDelete, onEdit }) {
   const [q, setQ] = useState("");
   const filtered = prescriptions.filter((r) =>
-    r.patient_name.toLowerCase().includes(q.toLowerCase()) || (r.patient_id || "").toLowerCase().includes(q.toLowerCase())
+    r.patient_name.toLowerCase().includes(q.toLowerCase()) ||
+    (r.patient_id || "").toLowerCase().includes(q.toLowerCase()) ||
+    (r.diagnosis || "").toLowerCase().includes(q.toLowerCase())
   );
   return (
     <div>
@@ -474,19 +476,20 @@ function HistoryView({ prescriptions, onReprint, onDelete, onEdit }) {
       <p className="rx-sub">All issued prescriptions, most recent first.</p>
       <div style={{ position: "relative", marginBottom: 14, maxWidth: 320 }}>
         <Search size={14} style={{ position: "absolute", left: 9, top: 10, color: "var(--ink-soft)" }} />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by patient name or ID…" style={{ width: "100%", padding: "8px 8px 8px 30px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 13 }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by patient name, ID, or diagnosis…" style={{ width: "100%", padding: "8px 8px 8px 30px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 13 }} />
       </div>
       {filtered.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>No prescriptions found.</div>
       ) : (
         <table className="rx-table">
-          <thead><tr><th>Date</th><th>Patient</th><th>ID</th><th>Medications</th><th></th></tr></thead>
+          <thead><tr><th>Date</th><th>Patient</th><th>ID</th><th>Diagnosis</th><th>Medications</th><th></th></tr></thead>
           <tbody>
             {filtered.map((r) => (
               <tr key={r.id}>
                 <td className="rx-mono" style={{ whiteSpace: "nowrap" }}>{formatDate(r.date)}</td>
                 <td>{r.patient_name}{r.patient_age ? <span style={{ color: "var(--ink-soft)" }}> · {r.patient_age}y</span> : ""}</td>
                 <td className="rx-mono" style={{ color: "var(--ink-soft)" }}>{r.patient_id || "—"}</td>
+                <td style={{ color: "var(--ink-soft)" }}>{r.diagnosis || "—"}</td>
                 <td>{r.items.map((it) => it.name).join(", ")}</td>
                 <td style={{ whiteSpace: "nowrap" }}>
                   <button className="rx-btn ghost" onClick={() => onEdit(r)}><Pencil size={13} /></button>
@@ -591,8 +594,11 @@ function StatsView({ prescriptions }) {
   }, [prescriptions]);
   const [month, setMonth] = useState(months[0] || monthKey(todayISO()));
   const [medQuery, setMedQuery] = useState("");
+  const [diagnosisQuery, setDiagnosisQuery] = useState("");
 
-  const inMonth = prescriptions.filter((r) => monthKey(r.date) === month);
+  const inMonth = prescriptions
+    .filter((r) => monthKey(r.date) === month)
+    .filter((r) => (r.diagnosis || "").toLowerCase().includes(diagnosisQuery.toLowerCase()));
   const patientSet = new Set(inMonth.map((r) => r.patient_name.trim().toLowerCase()));
   const medCounts = {};
   inMonth.forEach((r) => r.items.forEach((it) => { medCounts[it.name] = (medCounts[it.name] || 0) + 1; }));
@@ -606,11 +612,17 @@ function StatsView({ prescriptions }) {
     <div>
       <h1 className="rx-h1">Statistics</h1>
       <p className="rx-sub">Monthly summary of prescriptions issued.</p>
-      <div className="rx-field" style={{ maxWidth: 220, marginBottom: 18 }}>
-        <label>Month</label>
-        <select value={month} onChange={(e) => setMonth(e.target.value)}>
-          {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
-        </select>
+      <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+        <div className="rx-field" style={{ maxWidth: 220, marginBottom: 0 }}>
+          <label>Month</label>
+          <select value={month} onChange={(e) => setMonth(e.target.value)}>
+            {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+          </select>
+        </div>
+        <div className="rx-field" style={{ maxWidth: 240, marginBottom: 0 }}>
+          <label>Diagnosis</label>
+          <input value={diagnosisQuery} onChange={(e) => setDiagnosisQuery(e.target.value)} placeholder="Filter by diagnosis…" />
+        </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
         <div className="rx-card">
@@ -784,10 +796,10 @@ function RxPad({ rx, settings }) {
       )}
 
       <div style={{ position: "absolute", top: "calc(14px - 4mm)", insetInlineEnd: 20 }}>
-        {rx.patient_id && <span className="rx-mono" style={{ fontSize: 12, color: "#4B5955" }}>{rx.patient_id}</span>}
+        {rx.patient_id && <span className="rx-mono" style={{ fontSize: 14, color: "#4B5955" }}>{rx.patient_id}</span>}
       </div>
 
-      <div style={{ display: "flex", gap: 24, fontSize: 13, marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 24, fontSize: 15, marginBottom: 18 }}>
         <div>
           {rx.patient_name}
           {rx.patient_age ? ` (${rx.patient_age})` : ""}
@@ -796,24 +808,24 @@ function RxPad({ rx, settings }) {
         <div style={{ marginInlineStart: "auto" }}>{formatDate(rx.date)}</div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 190px", gap: 0 }}>
-        <div style={{ paddingInlineEnd: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 170px", gap: 0 }}>
+        <div style={{ paddingInlineEnd: 10 }}>
           {rx.items.map((it, i) => (
-            <div key={i} style={{ marginBottom: 16 }}>
+            <div key={i} style={{ marginBottom: 18 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                <span style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontWeight: 600, fontSize: 18, color: "#0B5E56" }}>℞</span>
-                <span style={{ fontSize: 14, fontWeight: 500 }}>
+                <span style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontWeight: 600, fontSize: 20, color: "#0B5E56" }}>℞</span>
+                <span style={{ fontSize: 16, fontWeight: 500 }}>
                   {it.name}{it.strength ? ` ${it.strength}` : ""}{it.form ? ` (${it.form})` : ""}
                 </span>
               </div>
               {(it.dose || it.frequency || it.duration || it.instructions) && (
-                <div style={{ fontSize: 12, color: "#4B5955", marginInlineStart: 26, marginTop: 2 }}>
+                <div style={{ fontSize: 14, color: "#4B5955", marginInlineStart: 22, marginTop: 3 }}>
                   {[it.dose, it.frequency, it.duration].filter(Boolean).join(", ")}
                   {it.instructions ? ` — ${it.instructions}` : ""}
                 </div>
               )}
               {it.instructions_ar && (
-                <div dir="rtl" style={{ fontSize: 12, color: "#4B5955", marginInlineStart: 26, marginTop: 2, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
+                <div dir="rtl" style={{ fontSize: 14, color: "#4B5955", marginInlineStart: 22, marginTop: 3, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
                   {it.instructions_ar}
                 </div>
               )}
@@ -821,13 +833,13 @@ function RxPad({ rx, settings }) {
           ))}
         </div>
 
-        <div style={{ paddingInlineStart: "calc(14px + 15mm + 6mm)" }}>
-          <div style={{ fontSize: 11.5, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.03em", color: "#4B5955", marginBottom: 8 }}>
+        <div style={{ paddingInlineStart: "calc(14px + 28mm)" }}>
+          <div style={{ fontSize: 13, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.03em", color: "#4B5955", marginBottom: 8 }}>
             <BiLabel en="Notes" ar={hasArabic ? "ملاحظات" : ""} />
           </div>
-          {rx.notes && <div style={{ fontSize: 11.5, marginBottom: 8, lineHeight: 1.5 }}>{rx.notes}</div>}
+          {rx.notes && <div style={{ fontSize: 13, marginBottom: 8, lineHeight: 1.5 }}>{rx.notes}</div>}
           {Array.from({ length: NOTES_LINE_COUNT }).map((_, i) => (
-            <div key={i} style={{ borderBottom: "1px solid #DDE3E0", height: 20 }} />
+            <div key={i} style={{ borderBottom: "1px solid #DDE3E0", height: 22 }} />
           ))}
         </div>
       </div>
