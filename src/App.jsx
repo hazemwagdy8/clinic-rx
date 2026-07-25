@@ -51,25 +51,28 @@ export default function App() {
   const [invTypes, setInvTypes] = useState([]);
   const [investigations, setInvestigations] = useState([]);
   const [printingInv, setPrintingInv] = useState(null);
+  const [patients, setPatients] = useState([]);
 
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
     setError("");
     try {
-      const [{ data: s, error: sErr }, { data: m, error: mErr }, { data: p, error: pErr }, { data: it, error: itErr }, { data: iv, error: ivErr }] = await Promise.all([
+      const [{ data: s, error: sErr }, { data: m, error: mErr }, { data: p, error: pErr }, { data: it, error: itErr }, { data: iv, error: ivErr }, { data: pt, error: ptErr }] = await Promise.all([
         supabase.from("settings").select("*").eq("id", "main").maybeSingle(),
         supabase.from("meds").select("*").order("name"),
         supabase.from("prescriptions").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }),
         supabase.from("investigation_types").select("*").order("name"),
         supabase.from("investigations").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("patients").select("*").order("name"),
       ]);
-      if (sErr || mErr || pErr || itErr || ivErr) throw (sErr || mErr || pErr || itErr || ivErr);
+      if (sErr || mErr || pErr || itErr || ivErr || ptErr) throw (sErr || mErr || pErr || itErr || ivErr || ptErr);
       setSettings(s || DEFAULT_SETTINGS);
       setMeds(m || []);
       setPrescriptions(p || []);
       setInvTypes(it || []);
       setInvestigations(iv || []);
+      setPatients(pt || []);
       setReady(true);
     } catch (e) {
       setError("Could not connect to the database. Check your Supabase setup in .env");
@@ -78,6 +81,35 @@ export default function App() {
   }
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(""), 2200); }
+
+  async function upsertPatientFromRecord(rec) {
+    const patientIdVal = (rec.patient_id || "").trim() || null;
+    try {
+      if (patientIdVal) {
+        const { data, error } = await supabase
+          .from("patients")
+          .upsert({ patient_id: patientIdVal, name: rec.patient_name, age: rec.patient_age, gender: rec.patient_gender }, { onConflict: "patient_id" })
+          .select()
+          .single();
+        if (!error && data) {
+          setPatients((prev) => {
+            const exists = prev.some((p) => p.id === data.id);
+            const next = exists ? prev.map((p) => (p.id === data.id ? data : p)) : [...prev, data];
+            return next.sort((a, b) => a.name.localeCompare(b.name));
+          });
+        }
+      } else {
+        const { data, error } = await supabase
+          .from("patients")
+          .insert({ name: rec.patient_name, age: rec.patient_age, gender: rec.patient_gender })
+          .select()
+          .single();
+        if (!error && data) setPatients((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      }
+    } catch (e) {
+      // Non-critical — the prescription/investigation itself already saved.
+    }
+  }
 
   async function saveSettings(next) {
     const { error } = await supabase.from("settings").upsert({ ...next, id: "main" });
@@ -108,6 +140,7 @@ export default function App() {
     setPrescriptions([data, ...prescriptions]);
     setPrintingRx(data);
     showToast("Prescription issued");
+    upsertPatientFromRecord(data);
   }
   async function deletePrescription(id) {
     const { error } = await supabase.from("prescriptions").delete().eq("id", id);
@@ -140,6 +173,7 @@ export default function App() {
     setInvestigations([data, ...investigations]);
     setPrintingInv(data);
     showToast("Investigation request issued");
+    upsertPatientFromRecord(data);
   }
   async function deleteInvestigation(id) {
     const { error } = await supabase.from("investigations").delete().eq("id", id);
@@ -180,7 +214,7 @@ export default function App() {
           <div className="rx-card" style={{ borderColor: "var(--danger)", color: "var(--danger)", fontSize: 13 }}>{error}</div>
         ) : (
           <>
-            {view === "new" && <NewPrescriptionView meds={meds} onIssue={issuePrescription} />}
+            {view === "new" && <NewPrescriptionView meds={meds} onIssue={issuePrescription} patients={patients} />}
             {view === "history" && (
               <HistoryView prescriptions={prescriptions} onReprint={(rx) => setPrintingRx(rx)} onDelete={deletePrescription} onEdit={(rx) => setEditingRx(rx)} />
             )}
@@ -192,6 +226,7 @@ export default function App() {
                 onIssue={issueInvestigation}
                 onDelete={deleteInvestigation}
                 onReprint={(inv) => setPrintingInv(inv)}
+                patients={patients}
               />
             )}
             {view === "stats" && <StatsView prescriptions={prescriptions} />}
@@ -273,7 +308,44 @@ function GlobalStyle() {
   );
 }
 
-function NewPrescriptionView({ meds, onIssue }) {
+function PatientPicker({ patients, onSelect }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const matches = q.trim().length === 0 ? [] : patients.filter((p) =>
+    p.name.toLowerCase().includes(q.toLowerCase()) || (p.patient_id || "").toLowerCase().includes(q.toLowerCase())
+  ).slice(0, 8);
+
+  return (
+    <div style={{ position: "relative", marginBottom: 12 }}>
+      <div style={{ position: "relative" }}>
+        <Search size={14} style={{ position: "absolute", left: 9, top: 10, color: "var(--ink-soft)" }} />
+        <input
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Search an existing patient by name or ID…"
+          style={{ width: "100%", padding: "8px 8px 8px 30px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 13 }}
+        />
+      </div>
+      {open && matches.length > 0 && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: "1px solid var(--line)", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.08)", zIndex: 20, maxHeight: 220, overflowY: "auto" }}>
+          {matches.map((p) => (
+            <div
+              key={p.id}
+              onClick={() => { onSelect(p); setQ(""); setOpen(false); }}
+              style={{ padding: "8px 10px", borderBottom: "1px solid var(--line)", cursor: "pointer", fontSize: 13 }}
+            >
+              <div style={{ fontWeight: 500 }}>{p.name}{p.age ? <span style={{ color: "var(--ink-soft)", fontWeight: 400 }}> · {p.age}y</span> : ""}</div>
+              {p.patient_id && <div style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>ID: {p.patient_id}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NewPrescriptionView({ meds, onIssue, patients }) {
   const [patientName, setPatientName] = useState("");
   const [patientAge, setPatientAge] = useState("");
   const [patientGender, setPatientGender] = useState("");
@@ -299,6 +371,10 @@ function NewPrescriptionView({ meds, onIssue }) {
       <p className="rx-sub">Fill in patient details and add medications, then issue and print.</p>
 
       <div className="rx-card" style={{ marginBottom: 16 }}>
+        <PatientPicker
+          patients={patients}
+          onSelect={(p) => { setPatientName(p.name); setPatientAge(p.age || ""); setPatientGender(p.gender || ""); setPatientId(p.patient_id || ""); }}
+        />
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 12 }}>
           <div className="rx-field"><label>Patient name</label><input value={patientName} onChange={(e) => setPatientName(e.target.value)} placeholder="Full name" /></div>
           <div className="rx-field"><label>Age</label><input value={patientAge} onChange={(e) => setPatientAge(e.target.value)} placeholder="e.g. 42" /></div>
@@ -669,7 +745,7 @@ function MedForm({ draft, setDraft }) {
   );
 }
 
-function InvestigationsView({ invTypes, investigations, onIssue, onDelete, onReprint }) {
+function InvestigationsView({ invTypes, investigations, onIssue, onDelete, onReprint, patients }) {
   const [tab, setTab] = useState("new");
   return (
     <div>
@@ -680,7 +756,7 @@ function InvestigationsView({ invTypes, investigations, onIssue, onDelete, onRep
         <button className="rx-btn" style={tab === "history" ? { background: "var(--teal)", color: "#fff", borderColor: "var(--teal)" } : {}} onClick={() => setTab("history")}>History</button>
       </div>
       {tab === "new" ? (
-        <NewInvestigationForm invTypes={invTypes} onIssue={onIssue} />
+        <NewInvestigationForm invTypes={invTypes} onIssue={onIssue} patients={patients} />
       ) : (
         <InvestigationHistory investigations={investigations} onDelete={onDelete} onReprint={onReprint} />
       )}
@@ -688,7 +764,7 @@ function InvestigationsView({ invTypes, investigations, onIssue, onDelete, onRep
   );
 }
 
-function NewInvestigationForm({ invTypes, onIssue }) {
+function NewInvestigationForm({ invTypes, onIssue, patients }) {
   const [patientName, setPatientName] = useState("");
   const [patientAge, setPatientAge] = useState("");
   const [patientGender, setPatientGender] = useState("");
@@ -709,6 +785,10 @@ function NewInvestigationForm({ invTypes, onIssue }) {
   return (
     <div>
       <div className="rx-card" style={{ marginBottom: 16 }}>
+        <PatientPicker
+          patients={patients}
+          onSelect={(p) => { setPatientName(p.name); setPatientAge(p.age || ""); setPatientGender(p.gender || ""); setPatientId(p.patient_id || ""); }}
+        />
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 12 }}>
           <div className="rx-field"><label>Patient name</label><input value={patientName} onChange={(e) => setPatientName(e.target.value)} placeholder="Full name" /></div>
           <div className="rx-field"><label>Age</label><input value={patientAge} onChange={(e) => setPatientAge(e.target.value)} placeholder="e.g. 42" /></div>
@@ -841,27 +921,27 @@ function InvestigationPad({ inv, settings }) {
         <FlaskConical size={30} color="#0B5E56" />
       </div>
 
-      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>
+      <div style={{ fontSize: 30, fontWeight: 600, marginBottom: 18 }}>
         <BiLabel en="Investigation Request" ar={hasArabic ? "طلب فحوصات" : ""} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 12, fontSize: 13, marginBottom: 18, paddingBottom: 12, borderBottom: "1px solid #DDE3E0" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 26, marginBottom: 22, paddingBottom: 14, borderBottom: "1px solid #DDE3E0" }}>
         <div><strong>Patient:</strong> {inv.patient_name}</div>
         <div><strong>Age:</strong> {inv.patient_age || "—"}</div>
         <div><strong>ID:</strong> {inv.patient_id || "—"}</div>
         <div><strong>Date:</strong> {formatDate(inv.date)}</div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px 16px", marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 20px", marginBottom: 26 }}>
         {(inv.items || []).map((name) => (
-          <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
-            <span style={{ fontSize: 16 }}>☑</span> {name}
+          <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 27 }}>
+            <span style={{ fontSize: 32 }}>☑</span> {name}
           </div>
         ))}
       </div>
 
       {inv.notes && (
-        <div style={{ fontSize: 12.5, marginBottom: 24 }}><strong>Notes:</strong> {inv.notes}</div>
+        <div style={{ fontSize: 25, marginBottom: 28 }}><strong>Notes:</strong> {inv.notes}</div>
       )}
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 40 }}>
