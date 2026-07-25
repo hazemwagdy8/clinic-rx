@@ -921,11 +921,11 @@ function InvestigationPad({ inv, settings }) {
         <FlaskConical size={30} color="#0B5E56" />
       </div>
 
-      <div style={{ fontSize: 30, fontWeight: 600, marginBottom: 18 }}>
+      <div style={{ fontSize: 22.5, fontWeight: 600, marginBottom: 18 }}>
         <BiLabel en="Investigation Request" ar={hasArabic ? "طلب فحوصات" : ""} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 26, marginBottom: 22, paddingBottom: 14, borderBottom: "1px solid #DDE3E0" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 19.5, marginBottom: 22, paddingBottom: 14, borderBottom: "1px solid #DDE3E0" }}>
         <div><strong>Patient:</strong> {inv.patient_name}</div>
         <div><strong>Age:</strong> {inv.patient_age || "—"}</div>
         <div><strong>ID:</strong> {inv.patient_id || "—"}</div>
@@ -934,14 +934,14 @@ function InvestigationPad({ inv, settings }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 20px", marginBottom: 26 }}>
         {(inv.items || []).map((name) => (
-          <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 27 }}>
-            <span style={{ fontSize: 32 }}>☑</span> {name}
+          <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 20.25 }}>
+            <span style={{ fontSize: 24 }}>☑</span> {name}
           </div>
         ))}
       </div>
 
       {inv.notes && (
-        <div style={{ fontSize: 25, marginBottom: 28 }}><strong>Notes:</strong> {inv.notes}</div>
+        <div style={{ fontSize: 18.75, marginBottom: 28 }}><strong>Notes:</strong> {inv.notes}</div>
       )}
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 40 }}>
