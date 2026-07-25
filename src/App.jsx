@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   FileText, Pill, History, BarChart3, Settings as SettingsIcon,
-  Plus, Trash2, Printer, Search, X, ArrowLeft, Pencil, Check
+  Plus, Trash2, Printer, Search, X, ArrowLeft, Pencil, Check, FlaskConical
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
@@ -48,21 +48,28 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [printingRx, setPrintingRx] = useState(null);
   const [editingRx, setEditingRx] = useState(null);
+  const [invTypes, setInvTypes] = useState([]);
+  const [investigations, setInvestigations] = useState([]);
+  const [printingInv, setPrintingInv] = useState(null);
 
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
     setError("");
     try {
-      const [{ data: s, error: sErr }, { data: m, error: mErr }, { data: p, error: pErr }] = await Promise.all([
+      const [{ data: s, error: sErr }, { data: m, error: mErr }, { data: p, error: pErr }, { data: it, error: itErr }, { data: iv, error: ivErr }] = await Promise.all([
         supabase.from("settings").select("*").eq("id", "main").maybeSingle(),
         supabase.from("meds").select("*").order("name"),
         supabase.from("prescriptions").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }),
+        supabase.from("investigation_types").select("*").order("name"),
+        supabase.from("investigations").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }),
       ]);
-      if (sErr || mErr || pErr) throw (sErr || mErr || pErr);
+      if (sErr || mErr || pErr || itErr || ivErr) throw (sErr || mErr || pErr || itErr || ivErr);
       setSettings(s || DEFAULT_SETTINGS);
       setMeds(m || []);
       setPrescriptions(p || []);
+      setInvTypes(it || []);
+      setInvestigations(iv || []);
       setReady(true);
     } catch (e) {
       setError("Could not connect to the database. Check your Supabase setup in .env");
@@ -116,10 +123,36 @@ export default function App() {
     showToast("Prescription updated");
   }
 
+  async function addInvType(name) {
+    const { data, error } = await supabase.from("investigation_types").insert({ name }).select().single();
+    if (error) { showToast("Could not add investigation"); return; }
+    setInvTypes([...invTypes, data].sort((a, b) => a.name.localeCompare(b.name)));
+  }
+  async function deleteInvType(id) {
+    const { error } = await supabase.from("investigation_types").delete().eq("id", id);
+    if (error) { showToast("Could not delete investigation"); return; }
+    setInvTypes(invTypes.filter((t) => t.id !== id));
+  }
+
+  async function issueInvestigation(inv) {
+    const { data, error } = await supabase.from("investigations").insert(inv).select().single();
+    if (error) { showToast("Could not save investigation request"); return; }
+    setInvestigations([data, ...investigations]);
+    setPrintingInv(data);
+    showToast("Investigation request issued");
+  }
+  async function deleteInvestigation(id) {
+    const { error } = await supabase.from("investigations").delete().eq("id", id);
+    if (error) { showToast("Could not delete investigation request"); return; }
+    setInvestigations(investigations.filter((r) => r.id !== id));
+    showToast("Investigation request deleted");
+  }
+
   const navItems = [
     { id: "new", label: "New prescription", icon: FileText },
     { id: "history", label: "History", icon: History },
     { id: "meds", label: "Medications", icon: Pill },
+    { id: "investigations", label: "Investigations", icon: FlaskConical },
     { id: "stats", label: "Statistics", icon: BarChart3 },
     { id: "settings", label: "Settings", icon: SettingsIcon },
   ];
@@ -152,8 +185,19 @@ export default function App() {
               <HistoryView prescriptions={prescriptions} onReprint={(rx) => setPrintingRx(rx)} onDelete={deletePrescription} onEdit={(rx) => setEditingRx(rx)} />
             )}
             {view === "meds" && <MedsView meds={meds} onAdd={addMed} onEdit={editMed} onDelete={deleteMed} />}
+            {view === "investigations" && (
+              <InvestigationsView
+                invTypes={invTypes}
+                investigations={investigations}
+                onIssue={issueInvestigation}
+                onDelete={deleteInvestigation}
+                onReprint={(inv) => setPrintingInv(inv)}
+              />
+            )}
             {view === "stats" && <StatsView prescriptions={prescriptions} />}
-            {view === "settings" && <SettingsView settings={settings} onSave={saveSettings} />}
+            {view === "settings" && (
+              <SettingsView settings={settings} onSave={saveSettings} invTypes={invTypes} onAddInvType={addInvType} onDeleteInvType={deleteInvType} />
+            )}
           </>
         )}
         {toast && <div className="rx-toast">{toast}</div>}
@@ -168,6 +212,7 @@ export default function App() {
           onClose={() => setEditingRx(null)}
         />
       )}
+      {printingInv && <InvestigationPrintOverlay inv={printingInv} settings={settings} onClose={() => setPrintingInv(null)} />}
     </div>
   );
 }
@@ -624,6 +669,211 @@ function MedForm({ draft, setDraft }) {
   );
 }
 
+function InvestigationsView({ invTypes, investigations, onIssue, onDelete, onReprint }) {
+  const [tab, setTab] = useState("new");
+  return (
+    <div>
+      <h1 className="rx-h1">Investigations</h1>
+      <p className="rx-sub">Request investigations for a patient and print a checklist form.</p>
+      <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+        <button className="rx-btn" style={tab === "new" ? { background: "var(--teal)", color: "#fff", borderColor: "var(--teal)" } : {}} onClick={() => setTab("new")}>New request</button>
+        <button className="rx-btn" style={tab === "history" ? { background: "var(--teal)", color: "#fff", borderColor: "var(--teal)" } : {}} onClick={() => setTab("history")}>History</button>
+      </div>
+      {tab === "new" ? (
+        <NewInvestigationForm invTypes={invTypes} onIssue={onIssue} />
+      ) : (
+        <InvestigationHistory investigations={investigations} onDelete={onDelete} onReprint={onReprint} />
+      )}
+    </div>
+  );
+}
+
+function NewInvestigationForm({ invTypes, onIssue }) {
+  const [patientName, setPatientName] = useState("");
+  const [patientAge, setPatientAge] = useState("");
+  const [patientGender, setPatientGender] = useState("");
+  const [patientId, setPatientId] = useState("");
+  const [date, setDate] = useState(todayISO());
+  const [notes, setNotes] = useState("");
+  const [selected, setSelected] = useState([]);
+
+  function toggle(name) {
+    setSelected(selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name]);
+  }
+  function reset() {
+    setPatientName(""); setPatientAge(""); setPatientGender(""); setPatientId(""); setDate(todayISO()); setNotes(""); setSelected([]);
+  }
+
+  const canIssue = patientName.trim().length > 0 && selected.length > 0;
+
+  return (
+    <div>
+      <div className="rx-card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 12 }}>
+          <div className="rx-field"><label>Patient name</label><input value={patientName} onChange={(e) => setPatientName(e.target.value)} placeholder="Full name" /></div>
+          <div className="rx-field"><label>Age</label><input value={patientAge} onChange={(e) => setPatientAge(e.target.value)} placeholder="e.g. 42" /></div>
+          <div className="rx-field"><label>Gender</label>
+            <select value={patientGender} onChange={(e) => setPatientGender(e.target.value)}>
+              <option value="">—</option><option value="Male">Male</option><option value="Female">Female</option>
+            </select>
+          </div>
+          <div className="rx-field"><label>Date</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        </div>
+        <div className="rx-field" style={{ maxWidth: 220, marginTop: 4, marginBottom: 0 }}>
+          <label>Patient ID (OpenEMR)</label>
+          <input value={patientId} onChange={(e) => setPatientId(e.target.value)} placeholder="e.g. 10432" />
+        </div>
+      </div>
+
+      <div className="rx-card" style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>Investigations required</div>
+        {invTypes.length === 0 ? (
+          <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+            No investigation types set up yet — add some in Settings first.
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            {invTypes.map((t) => (
+              <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                <input type="checkbox" checked={selected.includes(t.name)} onChange={() => toggle(t.name)} />
+                {t.name}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rx-card" style={{ marginBottom: 16 }}>
+        <div className="rx-field" style={{ marginBottom: 0 }}>
+          <label>Notes (optional)</label>
+          <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Clinical context for the lab" />
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <button
+          className="rx-btn primary"
+          disabled={!canIssue}
+          style={{ opacity: canIssue ? 1 : 0.5, cursor: canIssue ? "pointer" : "not-allowed" }}
+          onClick={() => {
+            onIssue({
+              date, patient_name: patientName.trim(), patient_age: patientAge, patient_gender: patientGender,
+              patient_id: patientId, items: selected, notes,
+            });
+            reset();
+          }}
+        >
+          <Printer size={14} /> Issue &amp; print
+        </button>
+        <button className="rx-btn ghost" onClick={reset}>Clear form</button>
+      </div>
+    </div>
+  );
+}
+
+function InvestigationHistory({ investigations, onDelete, onReprint }) {
+  const [q, setQ] = useState("");
+  const filtered = investigations.filter((r) =>
+    r.patient_name.toLowerCase().includes(q.toLowerCase()) || (r.patient_id || "").toLowerCase().includes(q.toLowerCase())
+  );
+  return (
+    <div>
+      <div style={{ position: "relative", marginBottom: 14, maxWidth: 320 }}>
+        <Search size={14} style={{ position: "absolute", left: 9, top: 10, color: "var(--ink-soft)" }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by patient name or ID…" style={{ width: "100%", padding: "8px 8px 8px 30px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 13 }} />
+      </div>
+      {filtered.length === 0 ? (
+        <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>No investigation requests found.</div>
+      ) : (
+        <table className="rx-table">
+          <thead><tr><th>Date</th><th>Patient</th><th>ID</th><th>Investigations</th><th></th></tr></thead>
+          <tbody>
+            {filtered.map((r) => (
+              <tr key={r.id}>
+                <td className="rx-mono" style={{ whiteSpace: "nowrap" }}>{formatDate(r.date)}</td>
+                <td>{r.patient_name}{r.patient_age ? <span style={{ color: "var(--ink-soft)" }}> · {r.patient_age}y</span> : ""}</td>
+                <td className="rx-mono" style={{ color: "var(--ink-soft)" }}>{r.patient_id || "—"}</td>
+                <td>{(r.items || []).join(", ")}</td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  <button className="rx-btn ghost" onClick={() => onReprint(r)}><Printer size={13} /></button>
+                  <button className="rx-btn ghost" onClick={() => { if (confirm("Delete this investigation request?")) onDelete(r.id); }}><Trash2 size={13} color="var(--danger)" /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function InvestigationPrintOverlay({ inv, settings, onClose }) {
+  return (
+    <>
+      <div className="no-print" style={{ position: "fixed", inset: 0, background: "rgba(22,35,31,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 }}>
+        <div style={{ background: "#fff", width: 620, maxWidth: "92vw", maxHeight: "85vh", overflowY: "auto", borderRadius: 10, padding: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+            <button className="rx-btn ghost" onClick={onClose}><ArrowLeft size={14} /> Back</button>
+            <button className="rx-btn primary" onClick={() => window.print()}><Printer size={14} /> Print</button>
+          </div>
+          <InvestigationPad inv={inv} settings={settings} />
+        </div>
+      </div>
+      <div className="print-only"><InvestigationPad inv={inv} settings={settings} /></div>
+    </>
+  );
+}
+
+function InvestigationPad({ inv, settings }) {
+  const hasArabic = !!(settings.clinic_name_ar || settings.doctor_name_ar || settings.address_ar);
+  const selected = new Set(inv.items || []);
+  return (
+    <div style={{ fontFamily: "'Inter', sans-serif", color: "#16231F", padding: "20px 28px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #0B5E56", paddingBottom: 12, marginBottom: 16 }}>
+        <div>
+          <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name}</div>
+          {settings.clinic_name_ar && (
+            <div dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Lora', serif", fontSize: 18, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name_ar}</div>
+          )}
+          <div style={{ fontSize: 12.5, color: "#4B5955", marginTop: 2 }}>{settings.doctor_name} · {settings.credentials}</div>
+          <div style={{ fontSize: 11, color: "#4B5955", marginTop: 2 }}>{settings.address} · {settings.phone}</div>
+        </div>
+        <FlaskConical size={30} color="#0B5E56" />
+      </div>
+
+      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>
+        <BiLabel en="Investigation Request" ar={hasArabic ? "طلب فحوصات" : ""} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 12, fontSize: 13, marginBottom: 18, paddingBottom: 12, borderBottom: "1px solid #DDE3E0" }}>
+        <div><strong>Patient:</strong> {inv.patient_name}</div>
+        <div><strong>Age:</strong> {inv.patient_age || "—"}</div>
+        <div><strong>ID:</strong> {inv.patient_id || "—"}</div>
+        <div><strong>Date:</strong> {formatDate(inv.date)}</div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px 16px", marginBottom: 20 }}>
+        {(inv.items || []).map((name) => (
+          <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
+            <span style={{ fontSize: 16 }}>☑</span> {name}
+          </div>
+        ))}
+      </div>
+
+      {inv.notes && (
+        <div style={{ fontSize: 12.5, marginBottom: 24 }}><strong>Notes:</strong> {inv.notes}</div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 40 }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ borderTop: "1px solid #16231F", width: 180, marginBottom: 4 }} />
+          <div style={{ fontSize: 11, color: "#4B5955" }}><BiLabel en="Doctor's signature" ar={hasArabic ? "توقيع الطبيب" : ""} /></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatsView({ prescriptions }) {
   const months = useMemo(() => {
     const set = new Set(prescriptions.map((r) => monthKey(r.date)));
@@ -701,7 +951,7 @@ function StatsView({ prescriptions }) {
   );
 }
 
-function SettingsView({ settings, onSave }) {
+function SettingsView({ settings, onSave, invTypes, onAddInvType, onDeleteInvType }) {
   const [draft, setDraft] = useState(settings);
   useEffect(() => setDraft(settings), [settings]);
   const set = (k) => (e) => setDraft({ ...draft, [k]: e.target.value });
@@ -751,7 +1001,45 @@ function SettingsView({ settings, onSave }) {
         <div className="rx-field"><label>Address (Arabic)</label><input dir="rtl" value={draft.address_ar || ""} onChange={set("address_ar")} placeholder="العنوان" /></div>
       </div>
 
+      <div className="rx-card" style={{ maxWidth: 460, marginTop: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Investigation types</div>
+        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>
+          This list is what shows up as the checklist on the Investigations tab.
+        </div>
+        <InvTypeManager invTypes={invTypes} onAdd={onAddInvType} onDelete={onDeleteInvType} />
+      </div>
+
       <button className="rx-btn primary" style={{ marginTop: 14 }} onClick={() => onSave(draft)}><Check size={13} /> Save settings</button>
+    </div>
+  );
+}
+
+function InvTypeManager({ invTypes, onAdd, onDelete }) {
+  const [name, setName] = useState("");
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. ESR" style={{ flex: 1, fontSize: 13, padding: "7px 9px", border: "1px solid var(--line)", borderRadius: 6 }} />
+        <button
+          className="rx-btn"
+          disabled={!name.trim()}
+          onClick={() => { onAdd(name.trim()); setName(""); }}
+        >
+          <Plus size={13} /> Add
+        </button>
+      </div>
+      {invTypes.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>No investigation types yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {invTypes.map((t) => (
+            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, background: "#F2F4F3", borderRadius: 100, padding: "4px 4px 4px 10px" }}>
+              {t.name}
+              <button className="rx-btn ghost" style={{ padding: 2 }} onClick={() => onDelete(t.id)}><X size={12} color="var(--danger)" /></button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -780,7 +1068,7 @@ function BiLabel({ en, ar }) {
       {ar && (
         <>
           {" / "}
-          <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.25em" }}>{ar}</span>
+          <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.5625em" }}>{ar}</span>
         </>
       )}
     </span>
@@ -802,14 +1090,14 @@ function RxPad({ rx, settings }) {
           <div>
             <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name}</div>
             {settings.clinic_name_ar && (
-              <div dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Lora', serif", fontSize: 22.5, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name_ar}</div>
+              <div dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Lora', serif", fontSize: 28.125, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name_ar}</div>
             )}
             <div style={{ fontSize: 12.5, color: "#4B5955", marginTop: 2 }}>
               {settings.doctor_name} · {settings.credentials}
               {settings.doctor_name_ar && (
                 <>
                   {" · "}
-                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.25em" }}>{settings.doctor_name_ar}</span>
+                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.5625em" }}>{settings.doctor_name_ar}</span>
                 </>
               )}
             </div>
@@ -818,7 +1106,7 @@ function RxPad({ rx, settings }) {
               {settings.address_ar && (
                 <>
                   {" · "}
-                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.25em" }}>{settings.address_ar}</span>
+                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.5625em" }}>{settings.address_ar}</span>
                 </>
               )}
             </div>
@@ -828,7 +1116,7 @@ function RxPad({ rx, settings }) {
       )}
 
       {usePreprinted && (settings.clinic_name_ar || settings.doctor_name_ar || settings.address_ar) && (
-        <div dir="rtl" style={{ textAlign: "right", fontSize: 13.75, color: "#4B5955", marginBottom: 10, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
+        <div dir="rtl" style={{ textAlign: "right", fontSize: 17.1875, color: "#4B5955", marginBottom: 10, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
           {[settings.clinic_name_ar, settings.doctor_name_ar, settings.address_ar].filter(Boolean).join(" · ")}
         </div>
       )}
@@ -863,7 +1151,7 @@ function RxPad({ rx, settings }) {
                 </div>
               )}
               {it.instructions_ar && (
-                <div dir="rtl" style={{ fontSize: 17.5, color: "#4B5955", marginInlineStart: 22, marginTop: 3, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
+                <div dir="rtl" style={{ fontSize: 21.875, color: "#4B5955", marginInlineStart: 22, marginTop: 3, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
                   {it.instructions_ar}
                 </div>
               )}
