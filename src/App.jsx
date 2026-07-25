@@ -19,6 +19,8 @@ const DEFAULT_SETTINGS = {
   preprinted_header_mm: 40,
 };
 
+const FOLLOWUP_OPTIONS = ["اسبوع", "اسبوعين", "3 اسابيع", "شهر"];
+
 function uid(prefix) {
   return (prefix || "id") + "_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
 }
@@ -234,13 +236,15 @@ function NewPrescriptionView({ meds, onIssue }) {
   const [diagnosis, setDiagnosis] = useState("");
   const [date, setDate] = useState(todayISO());
   const [notes, setNotes] = useState("");
+  const [followupEnabled, setFollowupEnabled] = useState(false);
+  const [followupPeriod, setFollowupPeriod] = useState(FOLLOWUP_OPTIONS[0]);
   const [items, setItems] = useState([]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   function addItem(item) { setItems([...items, { ...item, uid: uid("it") }]); setPickerOpen(false); }
   function updateItem(uidVal, patch) { setItems(items.map((it) => (it.uid === uidVal ? { ...it, ...patch } : it))); }
   function removeItem(uidVal) { setItems(items.filter((it) => it.uid !== uidVal)); }
-  function reset() { setPatientName(""); setPatientAge(""); setPatientGender(""); setPatientId(""); setDiagnosis(""); setDate(todayISO()); setNotes(""); setItems([]); }
+  function reset() { setPatientName(""); setPatientAge(""); setPatientGender(""); setPatientId(""); setDiagnosis(""); setDate(todayISO()); setNotes(""); setFollowupEnabled(false); setFollowupPeriod(FOLLOWUP_OPTIONS[0]); setItems([]); }
 
   const canIssue = patientName.trim().length > 0 && items.length > 0;
 
@@ -302,6 +306,21 @@ function NewPrescriptionView({ meds, onIssue }) {
         </div>
       </div>
 
+      <div className="rx-card" style={{ marginBottom: 16 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+          <input type="checkbox" checked={followupEnabled} onChange={(e) => setFollowupEnabled(e.target.checked)} />
+          Add استشارة (follow-up) to printed prescription
+        </label>
+        {followupEnabled && (
+          <div className="rx-field" style={{ maxWidth: 200, marginTop: 10, marginBottom: 0 }}>
+            <label>Follow-up in</label>
+            <select dir="rtl" value={followupPeriod} onChange={(e) => setFollowupPeriod(e.target.value)}>
+              {FOLLOWUP_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+
       <div style={{ display: "flex", gap: 10 }}>
         <button className="rx-btn primary" disabled={!canIssue} style={{ opacity: canIssue ? 1 : 0.5, cursor: canIssue ? "pointer" : "not-allowed" }}
           onClick={() => {
@@ -309,6 +328,7 @@ function NewPrescriptionView({ meds, onIssue }) {
               date, patient_name: patientName.trim(), patient_age: patientAge, patient_gender: patientGender,
               patient_id: patientId, diagnosis,
               items: items.map(({ uid: _u, ...rest }) => rest), notes,
+              followup_period: followupEnabled ? followupPeriod : null,
             };
             onIssue(rx);
             reset();
@@ -331,6 +351,8 @@ function EditPrescriptionModal({ rx, meds, onSave, onClose }) {
   const [diagnosis, setDiagnosis] = useState(rx.diagnosis || "");
   const [date, setDate] = useState(rx.date);
   const [notes, setNotes] = useState(rx.notes || "");
+  const [followupEnabled, setFollowupEnabled] = useState(!!rx.followup_period);
+  const [followupPeriod, setFollowupPeriod] = useState(rx.followup_period || FOLLOWUP_OPTIONS[0]);
   const [items, setItems] = useState((rx.items || []).map((it) => ({ ...it, uid: uid("it") })));
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -395,6 +417,21 @@ function EditPrescriptionModal({ rx, meds, onSave, onClose }) {
           <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
 
+        <div style={{ marginTop: 14 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+            <input type="checkbox" checked={followupEnabled} onChange={(e) => setFollowupEnabled(e.target.checked)} />
+            Add استشارة (follow-up) to printed prescription
+          </label>
+          {followupEnabled && (
+            <div className="rx-field" style={{ maxWidth: 200, marginTop: 10, marginBottom: 0 }}>
+              <label>Follow-up in</label>
+              <select dir="rtl" value={followupPeriod} onChange={(e) => setFollowupPeriod(e.target.value)}>
+                {FOLLOWUP_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+
         <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
           <button
             className="rx-btn primary"
@@ -403,6 +440,7 @@ function EditPrescriptionModal({ rx, meds, onSave, onClose }) {
             onClick={() => onSave({
               date, patient_name: patientName.trim(), patient_age: patientAge, patient_gender: patientGender,
               patient_id: patientId, diagnosis, items: items.map(({ uid: _u, ...rest }) => rest), notes,
+              followup_period: followupEnabled ? followupPeriod : null,
             })}
           >
             <Check size={14} /> Save changes
@@ -742,7 +780,7 @@ function BiLabel({ en, ar }) {
       {ar && (
         <>
           {" / "}
-          <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>{ar}</span>
+          <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.25em" }}>{ar}</span>
         </>
       )}
     </span>
@@ -764,14 +802,14 @@ function RxPad({ rx, settings }) {
           <div>
             <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name}</div>
             {settings.clinic_name_ar && (
-              <div dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Lora', serif", fontSize: 18, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name_ar}</div>
+              <div dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Lora', serif", fontSize: 22.5, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name_ar}</div>
             )}
             <div style={{ fontSize: 12.5, color: "#4B5955", marginTop: 2 }}>
               {settings.doctor_name} · {settings.credentials}
               {settings.doctor_name_ar && (
                 <>
                   {" · "}
-                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>{settings.doctor_name_ar}</span>
+                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.25em" }}>{settings.doctor_name_ar}</span>
                 </>
               )}
             </div>
@@ -780,7 +818,7 @@ function RxPad({ rx, settings }) {
               {settings.address_ar && (
                 <>
                   {" · "}
-                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>{settings.address_ar}</span>
+                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.25em" }}>{settings.address_ar}</span>
                 </>
               )}
             </div>
@@ -790,7 +828,7 @@ function RxPad({ rx, settings }) {
       )}
 
       {usePreprinted && (settings.clinic_name_ar || settings.doctor_name_ar || settings.address_ar) && (
-        <div dir="rtl" style={{ textAlign: "right", fontSize: 11, color: "#4B5955", marginBottom: 10, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
+        <div dir="rtl" style={{ textAlign: "right", fontSize: 13.75, color: "#4B5955", marginBottom: 10, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
           {[settings.clinic_name_ar, settings.doctor_name_ar, settings.address_ar].filter(Boolean).join(" · ")}
         </div>
       )}
@@ -825,12 +863,18 @@ function RxPad({ rx, settings }) {
                 </div>
               )}
               {it.instructions_ar && (
-                <div dir="rtl" style={{ fontSize: 14, color: "#4B5955", marginInlineStart: 22, marginTop: 3, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
+                <div dir="rtl" style={{ fontSize: 17.5, color: "#4B5955", marginInlineStart: 22, marginTop: 3, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
                   {it.instructions_ar}
                 </div>
               )}
             </div>
           ))}
+
+          {rx.followup_period && (
+            <div dir="rtl" style={{ marginTop: 10, fontSize: 17.5, fontWeight: 500, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
+              استشارة بعد {rx.followup_period}
+            </div>
+          )}
         </div>
 
         <div style={{ paddingInlineStart: "calc(14px + 28mm)" }}>
