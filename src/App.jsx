@@ -905,50 +905,15 @@ function InvestigationPrintOverlay({ inv, settings, onClose }) {
 }
 
 function InvestigationPad({ inv, settings }) {
-  const hasArabic = !!(settings.clinic_name_ar || settings.doctor_name_ar || settings.address_ar);
   const selected = new Set(inv.items || []);
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", color: "#16231F", padding: "20px 28px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #0B5E56", paddingBottom: 12, marginBottom: 16 }}>
-        <div>
-          <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name}</div>
-          {settings.clinic_name_ar && (
-            <div dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Lora', serif", fontSize: 18, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name_ar}</div>
-          )}
-          <div style={{ fontSize: 12.5, color: "#4B5955", marginTop: 2 }}>{settings.doctor_name} · {settings.credentials}</div>
-          <div style={{ fontSize: 11, color: "#4B5955", marginTop: 2 }}>{settings.address} · {settings.phone}</div>
-        </div>
-        <FlaskConical size={30} color="#0B5E56" />
-      </div>
-
-      <div style={{ fontSize: 22.5, fontWeight: 600, marginBottom: 18 }}>
-        <BiLabel en="Investigation Request" ar={hasArabic ? "طلب فحوصات" : ""} />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 19.5, marginBottom: 22, paddingBottom: 14, borderBottom: "1px solid #DDE3E0" }}>
-        <div><strong>Patient:</strong> {inv.patient_name}</div>
-        <div><strong>Age:</strong> {inv.patient_age || "—"}</div>
-        <div><strong>ID:</strong> {inv.patient_id || "—"}</div>
-        <div><strong>Date:</strong> {formatDate(inv.date)}</div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 20px", marginBottom: 26 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px 16px" }}>
         {(inv.items || []).map((name) => (
-          <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 20.25 }}>
-            <span style={{ fontSize: 24 }}>☑</span> {name}
+          <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
+            <span style={{ fontSize: 16 }}>☑</span> {name}
           </div>
         ))}
-      </div>
-
-      {inv.notes && (
-        <div style={{ fontSize: 18.75, marginBottom: 28 }}><strong>Notes:</strong> {inv.notes}</div>
-      )}
-
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 40 }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ borderTop: "1px solid #16231F", width: 180, marginBottom: 4 }} />
-          <div style={{ fontSize: 11, color: "#4B5955" }}><BiLabel en="Doctor's signature" ar={hasArabic ? "توقيع الطبيب" : ""} /></div>
-        </div>
       </div>
     </div>
   );
