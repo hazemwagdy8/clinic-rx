@@ -908,6 +908,7 @@ function InvestigationPad({ inv, settings }) {
   const selected = new Set(inv.items || []);
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", color: "#16231F", padding: "20px 28px" }}>
+      <div style={{ height: "50mm" }} />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px 16px" }}>
         {(inv.items || []).map((name) => (
           <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
