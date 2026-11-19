@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   FileText, Pill, History, BarChart3, Settings as SettingsIcon,
   Plus, Trash2, Printer, Search, X, ArrowLeft, Pencil, Check, FlaskConical
@@ -24,14 +24,38 @@ const FOLLOWUP_OPTIONS = ["اسبوع", "اسبوعين", "3 اسابيع", "ش�
 function uid(prefix) {
   return (prefix || "id") + "_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
 }
-function todayISO() { return new Date().toISOString().slice(0, 10); }
-function monthKey(dateStr) { return (dateStr || "").slice(0, 7); }
-function monthLabel(key) {
-  if (!key) return "";
-  const [y, m] = key.split("-");
-  const d = new Date(Number(y), Number(m) - 1, 1);
-  return d.toLocaleString(undefined, { month: "long", year: "numeric" });
+// Local-calendar YYYY-MM-DD (toISOString() is UTC and would return yesterday
+// between 00:00 and 02:00/03:00 Egypt time).
+function localISO(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+function todayISO() { return localISO(new Date()); }
+function formatRangeDate(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+// Presets for the Statistics date range. Week starts on Saturday (Egyptian work week).
+function rangePreset(key) {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const today = localISO(now);
+  switch (key) {
+    case "today": return [today, today];
+    case "week": {
+      const start = new Date(y, m, now.getDate() - ((now.getDay() + 1) % 7));
+      return [localISO(start), today];
+    }
+    case "month": return [localISO(new Date(y, m, 1)), today];
+    case "lastMonth": return [localISO(new Date(y, m - 1, 1)), localISO(new Date(y, m, 0))];
+    case "year": return [localISO(new Date(y, 0, 1)), today];
+    default: return [today, today];
+  }
+}
+const RANGE_PRESETS = [
+  ["today", "Today"], ["week", "This week"], ["month", "This month"], ["lastMonth", "Last month"], ["year", "This year"],
+];
 function formatDate(dateStr) {
   if (!dateStr) return "";
   const d = new Date(dateStr + "T00:00:00");
@@ -291,6 +315,15 @@ function GlobalStyle() {
       .rx-toast { position: fixed; bottom: 16px; right: 16px; background: var(--ink); color: #fff; padding: 8px 14px; border-radius: 8px; font-size: 12.5px; z-index: 80; }
       .rx-bar-track { background: #ECEFED; border-radius: 4px; height: 8px; width: 100%; overflow: hidden; }
       .rx-bar-fill { background: var(--teal); height: 100%; border-radius: 4px; }
+      /* Arabic text: one rule for UI + print. Each Arabic element carries lang="ar";
+         its original size goes in --ar-base (defaults to the inherited size) and
+         --ar-scale enlarges it. Change --ar-scale here to resize all Arabic at once. */
+      .rxapp { --ar-scale: 1.2; }
+      .rxapp [lang="ar"] {
+        font-family: 'Noto Sans Arabic', 'Inter', sans-serif;
+        font-size: calc(var(--ar-base, 1em) * var(--ar-scale));
+      }
+      .rxapp [lang="ar"] [lang="ar"] { font-size: inherit; --ar-base: initial; }
       .print-only { display: none; }
       @media print {
         body * { visibility: hidden !important; }
@@ -412,8 +445,8 @@ function NewPrescriptionView({ meds, onIssue, patients }) {
                 <input value={it.instructions || ""} onChange={(e) => updateItem(it.uid, { instructions: e.target.value })} placeholder="Special instructions (optional)" style={{ fontSize: 12.5, padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 5 }} />
               </div>
               <div style={{ marginTop: 6 }}>
-                <input dir="rtl" value={it.instructions_ar || ""} onChange={(e) => updateItem(it.uid, { instructions_ar: e.target.value })} placeholder="تعليمات بالعربي (اختياري)"
-                  style={{ fontSize: 12.5, padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 5, width: "100%" }} />
+                <input dir="rtl" lang="ar" value={it.instructions_ar || ""} onChange={(e) => updateItem(it.uid, { instructions_ar: e.target.value })} placeholder="تعليمات بالعربي (اختياري)"
+                  style={{ "--ar-base": "12.5px", padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 5, width: "100%" }} />
               </div>
             </div>
           ))
@@ -430,12 +463,12 @@ function NewPrescriptionView({ meds, onIssue, patients }) {
       <div className="rx-card" style={{ marginBottom: 16 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
           <input type="checkbox" checked={followupEnabled} onChange={(e) => setFollowupEnabled(e.target.checked)} />
-          Add استشارة (follow-up) to printed prescription
+          Add <span lang="ar">استشارة</span> (follow-up) to printed prescription
         </label>
         {followupEnabled && (
           <div className="rx-field" style={{ maxWidth: 200, marginTop: 10, marginBottom: 0 }}>
             <label>Follow-up in</label>
-            <select dir="rtl" value={followupPeriod} onChange={(e) => setFollowupPeriod(e.target.value)}>
+            <select dir="rtl" lang="ar" style={{ "--ar-base": "13.5px" }} value={followupPeriod} onChange={(e) => setFollowupPeriod(e.target.value)}>
               {FOLLOWUP_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
             </select>
           </div>
@@ -526,8 +559,8 @@ function EditPrescriptionModal({ rx, meds, onSave, onClose }) {
                 <input value={it.instructions || ""} onChange={(e) => updateItem(it.uid, { instructions: e.target.value })} placeholder="Special instructions (optional)" style={{ fontSize: 12.5, padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 5 }} />
               </div>
               <div style={{ marginTop: 6 }}>
-                <input dir="rtl" value={it.instructions_ar || ""} onChange={(e) => updateItem(it.uid, { instructions_ar: e.target.value })} placeholder="تعليمات بالعربي (اختياري)"
-                  style={{ fontSize: 12.5, padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 5, width: "100%" }} />
+                <input dir="rtl" lang="ar" value={it.instructions_ar || ""} onChange={(e) => updateItem(it.uid, { instructions_ar: e.target.value })} placeholder="تعليمات بالعربي (اختياري)"
+                  style={{ "--ar-base": "12.5px", padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 5, width: "100%" }} />
               </div>
             </div>
           ))
@@ -541,12 +574,12 @@ function EditPrescriptionModal({ rx, meds, onSave, onClose }) {
         <div style={{ marginTop: 14 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
             <input type="checkbox" checked={followupEnabled} onChange={(e) => setFollowupEnabled(e.target.checked)} />
-            Add استشارة (follow-up) to printed prescription
+            Add <span lang="ar">استشارة</span> (follow-up) to printed prescription
           </label>
           {followupEnabled && (
             <div className="rx-field" style={{ maxWidth: 200, marginTop: 10, marginBottom: 0 }}>
               <label>Follow-up in</label>
-              <select dir="rtl" value={followupPeriod} onChange={(e) => setFollowupPeriod(e.target.value)}>
+              <select dir="rtl" lang="ar" style={{ "--ar-base": "13.5px" }} value={followupPeriod} onChange={(e) => setFollowupPeriod(e.target.value)}>
                 {FOLLOWUP_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
               </select>
             </div>
@@ -921,47 +954,71 @@ function InvestigationPad({ inv, settings }) {
 }
 
 function StatsView({ prescriptions }) {
-  const months = useMemo(() => {
-    const set = new Set(prescriptions.map((r) => monthKey(r.date)));
-    set.add(monthKey(todayISO()));
-    return Array.from(set).sort().reverse();
-  }, [prescriptions]);
-  const [month, setMonth] = useState(months[0] || monthKey(todayISO()));
+  const [[fromDate, toDate], setRange] = useState(() => rangePreset("month"));
   const [medQuery, setMedQuery] = useState("");
   const [diagnosisQuery, setDiagnosisQuery] = useState("");
 
-  const inMonth = prescriptions
-    .filter((r) => monthKey(r.date) === month)
+  // Compare plain YYYY-MM-DD strings so no timezone conversion can shift a day.
+  // If From is after To, use them swapped (and say so) rather than show nothing.
+  const swapped = !!(fromDate && toDate && fromDate > toDate);
+  const lo = swapped ? toDate : fromDate;
+  const hi = swapped ? fromDate : toDate;
+
+  const inRange = prescriptions
+    .filter((r) => {
+      const d = (r.date || "").slice(0, 10);
+      return (!lo || d >= lo) && (!hi || d <= hi);
+    })
     .filter((r) => (r.diagnosis || "").toLowerCase().includes(diagnosisQuery.toLowerCase()));
-  const patientSet = new Set(inMonth.map((r) => r.patient_name.trim().toLowerCase()));
+  const patientSet = new Set(inRange.map((r) => r.patient_name.trim().toLowerCase()));
   const medCounts = {};
-  inMonth.forEach((r) => r.items.forEach((it) => { medCounts[it.name] = (medCounts[it.name] || 0) + 1; }));
+  inRange.forEach((r) => r.items.forEach((it) => { medCounts[it.name] = (medCounts[it.name] || 0) + 1; }));
   const sortedMeds = Object.entries(medCounts)
     .filter(([name]) => name.toLowerCase().includes(medQuery.toLowerCase()))
     .sort((a, b) => b[1] - a[1]);
   const maxCount = sortedMeds.length ? sortedMeds[0][1] : 1;
-  const totalItems = inMonth.reduce((s, r) => s + r.items.length, 0);
+  const totalItems = inRange.reduce((s, r) => s + r.items.length, 0);
+
+  const rangeText = lo && hi
+    ? (lo === hi ? formatRangeDate(lo) : `${formatRangeDate(lo)} – ${formatRangeDate(hi)}`)
+    : lo ? `From ${formatRangeDate(lo)}` : hi ? `Up to ${formatRangeDate(hi)}` : "All dates";
 
   return (
     <div>
       <h1 className="rx-h1">Statistics</h1>
-      <p className="rx-sub">Monthly summary of prescriptions issued.</p>
-      <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
-        <div className="rx-field" style={{ maxWidth: 220, marginBottom: 0 }}>
-          <label>Month</label>
-          <select value={month} onChange={(e) => setMonth(e.target.value)}>
-            {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
-          </select>
+      <p className="rx-sub">Summary of prescriptions issued in the selected period</p>
+      <div style={{ display: "flex", gap: 12, marginBottom: 6, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div className="rx-field" style={{ marginBottom: 0 }}>
+          <label>From</label>
+          <input type="date" value={fromDate} onChange={(e) => setRange([e.target.value, toDate])} />
+        </div>
+        <div className="rx-field" style={{ marginBottom: 0 }}>
+          <label>To</label>
+          <input type="date" value={toDate} onChange={(e) => setRange([fromDate, e.target.value])} />
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {RANGE_PRESETS.map(([key, label]) => {
+            const [pf, pt] = rangePreset(key);
+            const active = pf === fromDate && pt === toDate;
+            return (
+              <button key={key} className={"rx-btn" + (active ? " primary" : "")} style={{ padding: "7px 10px", fontSize: 12.5 }}
+                onClick={() => setRange([pf, pt])}>{label}</button>
+            );
+          })}
         </div>
         <div className="rx-field" style={{ maxWidth: 240, marginBottom: 0 }}>
           <label>Diagnosis</label>
           <input value={diagnosisQuery} onChange={(e) => setDiagnosisQuery(e.target.value)} placeholder="Filter by diagnosis…" />
         </div>
       </div>
+      <div style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 18 }}>
+        {rangeText}
+        {swapped && <span style={{ color: "var(--amber)", marginInlineStart: 8 }}>“From” was after “To” — showing the dates swapped.</span>}
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
         <div className="rx-card">
           <div style={{ fontSize: 11, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.03em" }}>Prescriptions issued</div>
-          <div className="rx-serif" style={{ fontSize: 26, marginTop: 4 }}>{inMonth.length}</div>
+          <div className="rx-serif" style={{ fontSize: 26, marginTop: 4 }}>{inRange.length}</div>
         </div>
         <div className="rx-card">
           <div style={{ fontSize: 11, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.03em" }}>Unique patients</div>
@@ -974,14 +1031,14 @@ function StatsView({ prescriptions }) {
       </div>
       <div className="rx-card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 500 }}>Medications issued this month</div>
+          <div style={{ fontSize: 13, fontWeight: 500 }}>Medications issued in this period</div>
           <div style={{ position: "relative", maxWidth: 220, flex: 1 }}>
             <Search size={13} style={{ position: "absolute", left: 8, top: 8, color: "var(--ink-soft)" }} />
             <input value={medQuery} onChange={(e) => setMedQuery(e.target.value)} placeholder="Search medication…" style={{ width: "100%", padding: "6px 8px 6px 26px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 12.5 }} />
           </div>
         </div>
         {sortedMeds.length === 0 ? (
-          <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>No prescriptions recorded for this month.</div>
+          <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>No prescriptions recorded for this period.</div>
         ) : (
           sortedMeds.map(([name, count]) => (
             <div key={name} style={{ marginBottom: 10 }}>
@@ -1042,9 +1099,9 @@ function SettingsView({ settings, onSave, invTypes, onAddInvType, onDeleteInvTyp
         <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>
           Only used if your pre-printed paper doesn't already have an Arabic clinic name — appears next to the English clinic name if filled in.
         </div>
-        <div className="rx-field"><label>Clinic name (Arabic)</label><input dir="rtl" value={draft.clinic_name_ar || ""} onChange={set("clinic_name_ar")} placeholder="اسم العيادة" /></div>
-        <div className="rx-field"><label>Doctor name (Arabic)</label><input dir="rtl" value={draft.doctor_name_ar || ""} onChange={set("doctor_name_ar")} placeholder="اسم الطبيب" /></div>
-        <div className="rx-field"><label>Address (Arabic)</label><input dir="rtl" value={draft.address_ar || ""} onChange={set("address_ar")} placeholder="العنوان" /></div>
+        <div className="rx-field"><label>Clinic name (Arabic)</label><input dir="rtl" lang="ar" style={{ "--ar-base": "13.5px" }} value={draft.clinic_name_ar || ""} onChange={set("clinic_name_ar")} placeholder="اسم العيادة" /></div>
+        <div className="rx-field"><label>Doctor name (Arabic)</label><input dir="rtl" lang="ar" style={{ "--ar-base": "13.5px" }} value={draft.doctor_name_ar || ""} onChange={set("doctor_name_ar")} placeholder="اسم الطبيب" /></div>
+        <div className="rx-field"><label>Address (Arabic)</label><input dir="rtl" lang="ar" style={{ "--ar-base": "13.5px" }} value={draft.address_ar || ""} onChange={set("address_ar")} placeholder="العنوان" /></div>
       </div>
 
       <div className="rx-card" style={{ maxWidth: 460, marginTop: 14 }}>
@@ -1114,7 +1171,7 @@ function BiLabel({ en, ar }) {
       {ar && (
         <>
           {" / "}
-          <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.5625em" }}>{ar}</span>
+          <span dir="rtl" lang="ar" style={{ unicodeBidi: "isolate", "--ar-base": "1.5625em" }}>{ar}</span>
         </>
       )}
     </span>
@@ -1136,14 +1193,14 @@ function RxPad({ rx, settings }) {
           <div>
             <div style={{ fontFamily: "'Lora', serif", fontSize: 22, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name}</div>
             {settings.clinic_name_ar && (
-              <div dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Lora', serif", fontSize: 28.125, fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name_ar}</div>
+              <div dir="rtl" lang="ar" style={{ fontFamily: "'Noto Sans Arabic', 'Lora', serif", "--ar-base": "28.125px", fontWeight: 600, color: "#073F3A" }}>{settings.clinic_name_ar}</div>
             )}
             <div style={{ fontSize: 12.5, color: "#4B5955", marginTop: 2 }}>
               {settings.doctor_name} · {settings.credentials}
               {settings.doctor_name_ar && (
                 <>
                   {" · "}
-                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.5625em" }}>{settings.doctor_name_ar}</span>
+                  <span dir="rtl" lang="ar" style={{ unicodeBidi: "isolate", "--ar-base": "1.5625em" }}>{settings.doctor_name_ar}</span>
                 </>
               )}
             </div>
@@ -1152,7 +1209,7 @@ function RxPad({ rx, settings }) {
               {settings.address_ar && (
                 <>
                   {" · "}
-                  <span dir="rtl" style={{ unicodeBidi: "isolate", fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif", fontSize: "1.5625em" }}>{settings.address_ar}</span>
+                  <span dir="rtl" lang="ar" style={{ unicodeBidi: "isolate", "--ar-base": "1.5625em" }}>{settings.address_ar}</span>
                 </>
               )}
             </div>
@@ -1162,7 +1219,7 @@ function RxPad({ rx, settings }) {
       )}
 
       {usePreprinted && (settings.clinic_name_ar || settings.doctor_name_ar || settings.address_ar) && (
-        <div dir="rtl" style={{ textAlign: "right", fontSize: 17.1875, color: "#4B5955", marginBottom: 10, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
+        <div dir="rtl" lang="ar" style={{ textAlign: "right", "--ar-base": "17.1875px", color: "#4B5955", marginBottom: 10 }}>
           {[settings.clinic_name_ar, settings.doctor_name_ar, settings.address_ar].filter(Boolean).join(" · ")}
         </div>
       )}
@@ -1183,7 +1240,7 @@ function RxPad({ rx, settings }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 170px", gap: 0 }}>
         <div style={{ paddingInlineEnd: 10 }}>
           {rx.items.map((it, i) => (
-            <div key={i} style={{ marginBottom: 18 }}>
+            <div key={i} style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                 <span style={{ fontFamily: "'Lora', serif", fontStyle: "italic", fontWeight: 600, fontSize: 20, color: "#0B5E56" }}>℞</span>
                 <span style={{ fontSize: 16, fontWeight: 500 }}>
@@ -1197,7 +1254,7 @@ function RxPad({ rx, settings }) {
                 </div>
               )}
               {it.instructions_ar && (
-                <div dir="rtl" style={{ fontSize: 21.875, color: "#4B5955", marginInlineStart: 22, marginTop: 3, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
+                <div dir="rtl" lang="ar" style={{ "--ar-base": "21.875px", color: "#4B5955", marginInlineStart: 22, marginTop: 3 }}>
                   {it.instructions_ar}
                 </div>
               )}
@@ -1205,14 +1262,15 @@ function RxPad({ rx, settings }) {
           ))}
 
           {rx.followup_period && (
-            <div dir="rtl" style={{ marginTop: 10, fontSize: 17.5, fontWeight: 500, fontFamily: "'Noto Sans Arabic', 'Inter', sans-serif" }}>
+            <div dir="rtl" lang="ar" style={{ marginTop: 10, "--ar-base": "17.5px", fontWeight: 500 }}>
               استشارة بعد {rx.followup_period}
             </div>
           )}
         </div>
 
         <div style={{ paddingInlineStart: "calc(14px + 28mm)" }}>
-          <div style={{ fontSize: 13, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.03em", color: "#4B5955", marginBottom: 8 }}>
+          {/* Heading spans the column's full 170px (the lines below stay indented) so the enlarged Arabic doesn't run off the page. */}
+          <div style={{ fontSize: 13, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.03em", color: "#4B5955", marginBottom: 8, marginInlineStart: "calc(-14px - 28mm)", textAlign: "end", whiteSpace: "nowrap" }}>
             <BiLabel en="Notes" ar={hasArabic ? "ملاحظات" : ""} />
           </div>
           {rx.notes && <div style={{ fontSize: 13, marginBottom: 8, lineHeight: 1.5 }}>{rx.notes}</div>}
